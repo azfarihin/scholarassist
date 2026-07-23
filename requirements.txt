@@ -4,3 +4,4 @@ pypdf
 faiss-cpu
 numpy
 python-dotenv
+tiktoken
