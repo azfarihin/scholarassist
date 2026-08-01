@@ -31,6 +31,7 @@ st.markdown("""
 
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 h1, h2, h3 { font-family: 'Fraunces', serif !important; color: #2D3142; }
+div[data-testid="stMarkdownContainer"] h1 { color: #F4F1EA !important; }
 
 .stApp { background-color: #FDFBF7; }
 
