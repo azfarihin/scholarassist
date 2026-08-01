@@ -4,7 +4,7 @@ import faiss
 import os
 from datetime import date
 from pypdf import PdfReader
-from helper_functions import get_embedding, get_completion_by_messages
+from helper_functions import get_embedding, get_completion_by_messages, get_text_from_image
 from utility import check_password
 
 st.set_page_config(layout="centered", page_title="ASSP Portal")
@@ -212,7 +212,7 @@ elif page == "📄 My Documents":
     st.caption("Upload documents relevant to your scholarship journey. Once added, you can ask about them in the Home chat.")
 
     with st.form("upload_form", clear_on_submit=True):
-        uploaded_file = st.file_uploader("Choose a file (PDF or TXT)", type=["pdf", "txt"])
+        uploaded_file = st.file_uploader("Choose a file (PDF, TXT, PNG, or JPEG)", type=["pdf", "txt", "png", "jpg", "jpeg"])
         category = st.selectbox("Document category", DOCUMENT_CATEGORIES)
         submitted = st.form_submit_button("Add to My Documents")
 
@@ -221,6 +221,8 @@ elif page == "📄 My Documents":
                 if uploaded_file.type == "application/pdf":
                     reader = PdfReader(uploaded_file)
                     full_text = " ".join([p.extract_text() or "" for p in reader.pages])
+                elif uploaded_file.type in ["image/png", "image/jpeg", "image/jpg"]:
+                    full_text = get_text_from_image(uploaded_file)
                 else:
                     full_text = uploaded_file.read().decode("utf-8")
 
@@ -266,8 +268,8 @@ elif page == "ℹ️ About & Methodology":
     **Key features:**
     - A pre-loaded Scholar Handbook so scholars can start asking questions immediately, no setup required
     - A personal document space ("My Documents") where scholars can add their own files — medical
-      certificates, claim receipts, Leave of Absence requests, and more — so the chat assistant can
-      answer questions using both the handbook and their own records
+      certificates, claim receipts, Leave of Absence requests, and more, including photos of documents
+      — so the chat assistant can answer questions using both the handbook and their own records
     - Transparent source excerpts shown for every answer, tagged by document and category, so scholars
       can verify exactly where an answer came from
     - An announcements feed to keep scholars updated without needing a separate email
@@ -278,18 +280,20 @@ elif page == "ℹ️ About & Methodology":
     st.header("Methodology")
     st.write("""
     This application uses Retrieval-Augmented Generation (RAG), extended to support multiple documents
-    from multiple sources:
+    from multiple sources and formats:
     1. The Scholar Handbook is loaded automatically on first use; scholars may also add their own
        documents under My Documents, each tagged with a category (e.g. Medical Certificate, Claim/Receipt).
-    2. Every document is split into overlapping text chunks and converted into a numerical embedding
+    2. Uploaded PDFs and text files are read directly; uploaded images (PNG/JPEG) are processed using
+       a vision-capable LLM to transcribe and extract their content before proceeding.
+    3. Every document is split into overlapping text chunks and converted into a numerical embedding
        using OpenAI's embedding model.
-    3. All chunks — from the handbook and from personal uploads — are stored together in a single local
+    4. All chunks — from the handbook and from personal uploads — are stored together in a single local
        FAISS vector index, alongside metadata recording which document and category each chunk came from.
-    4. When a scholar asks a question, it is also converted into an embedding.
-    5. FAISS retrieves the most similar chunks across all available documents, along with a relevance score.
-    6. These chunks, together with their source and category, are passed to an LLM along with the question
+    5. When a scholar asks a question, it is also converted into an embedding.
+    6. FAISS retrieves the most similar chunks across all available documents, along with a relevance score.
+    7. These chunks, together with their source and category, are passed to an LLM along with the question
        to generate a grounded answer.
-    7. The source excerpts, their originating document, and relevance labels are shown to the scholar for
+    8. The source excerpts, their originating document, and relevance labels are shown to the scholar for
        full transparency.
     """)
     st.image("scholarassist_flowchart_v1.png", caption="RAG Process Flow for the Document Q&A feature")
