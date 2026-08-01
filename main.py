@@ -203,7 +203,10 @@ if page == "🏠 Home":
         </div>
         """, unsafe_allow_html=True)
 
-    st.divider()
+ st.divider()
+
+    if not st.session_state.chunks:
+        st.error("The default handbook couldn't be loaded. Please upload a document under 'My Documents' to start chatting.")
 
     # ---------- Chat ----------
     st.subheader("💬 Ask ASSP Assist")
