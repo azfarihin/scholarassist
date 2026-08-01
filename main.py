@@ -21,6 +21,15 @@ def chunk_text(text, chunk_size=500, overlap=50):
         start += chunk_size - overlap
     return chunks
 
+# ---------- Helper: convert FAISS L2 distance to a friendly relevance label ----------
+def relevance_label(distance):
+    if distance < 0.3:
+        return "🟢 High relevance"
+    elif distance < 0.6:
+        return "🟡 Medium relevance"
+    else:
+        return "🟠 Low relevance"
+
 # ---------- Sidebar navigation ----------
 page = st.sidebar.radio("Navigate", ["Q&A", "About Us", "Methodology"])
 
@@ -30,6 +39,9 @@ if "chunks" not in st.session_state:
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+if "feedback" not in st.session_state:
+    st.session_state.feedback = {}
 
 # ---------- Q&A Page ----------
 if page == "Q&A":
@@ -58,9 +70,8 @@ if page == "Q&A":
                 full_text = uploaded_file.read().decode("utf-8")
 
             chunks = chunk_text(full_text)
-            embeddings = get_embedding(chunks)  # list of embedding vectors
+            embeddings = get_embedding(chunks)
 
-            # ---------- Build FAISS index ----------
             embeddings_array = np.array(embeddings).astype("float32")
             dimension = embeddings_array.shape[1]
             index = faiss.IndexFlatL2(dimension)
@@ -70,26 +81,60 @@ if page == "Q&A":
             st.session_state.faiss_index = index
         st.success(f"Document processed into {len(chunks)} chunks and stored in FAISS. You can now ask questions!")
 
-    # Display chat history
-    for msg in st.session_state.messages:
+    # ---------- Suggested starter questions ----------
+    if st.session_state.chunks and not st.session_state.messages:
+        st.markdown("**Try asking:**")
+        starter_questions = [
+            "What is the bond duration for this scholarship?",
+            "How do I apply for a leave of absence or extension?",
+            "What are my obligations while studying overseas?",
+        ]
+        cols = st.columns(len(starter_questions))
+        clicked_question = None
+        for col, q in zip(cols, starter_questions):
+            with col:
+                if st.button(q, use_container_width=True):
+                    clicked_question = q
+    else:
+        clicked_question = None
+
+    # Display chat history with feedback + sources
+    for idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
+            if msg["role"] == "assistant" and "sources" in msg:
+                with st.expander("📄 Show sources used for this answer"):
+                    for i, (chunk_text_snippet, dist) in enumerate(msg["sources"]):
+                        st.caption(f"**Excerpt {i+1}** — {relevance_label(dist)}")
+                        st.text(chunk_text_snippet[:400] + ("..." if len(chunk_text_snippet) > 400 else ""))
+
+                fb_col1, fb_col2, _ = st.columns([1, 1, 8])
+                with fb_col1:
+                    if st.button("👍", key=f"up_{idx}"):
+                        st.session_state.feedback[idx] = "up"
+                with fb_col2:
+                    if st.button("👎", key=f"down_{idx}"):
+                        st.session_state.feedback[idx] = "down"
+                if idx in st.session_state.feedback:
+                    st.caption(f"Feedback recorded: {st.session_state.feedback[idx]}")
 
     # Chat input
     if st.session_state.chunks:
         user_question = st.chat_input("Ask a question about the handbook...")
-        if user_question:
-            st.session_state.messages.append({"role": "user", "content": user_question})
+        final_question = clicked_question or user_question
+
+        if final_question:
+            st.session_state.messages.append({"role": "user", "content": final_question})
             with st.chat_message("user"):
-                st.write(user_question)
+                st.write(final_question)
 
             # ---------- Retrieve top 3 relevant chunks via FAISS ----------
-            q_embedding = np.array(get_embedding([user_question])).astype("float32")
+            q_embedding = np.array(get_embedding([final_question])).astype("float32")
             k = min(3, len(st.session_state.chunks))
             distances, indices = st.session_state.faiss_index.search(q_embedding, k)
-            context = "\n\n".join([st.session_state.chunks[i] for i in indices[0]])
+            retrieved = [(st.session_state.chunks[i], float(d)) for i, d in zip(indices[0], distances[0])]
+            context = "\n\n".join([chunk for chunk, _ in retrieved])
 
-            # Build prompt with context + basic prompt-injection safeguard
             system_prompt = f"""You are a helpful assistant answering questions about a scholarship Admin Handbook.
 Use ONLY the following context to answer. If the answer isn't in the context, say you don't know.
 
@@ -107,7 +152,17 @@ Context:
                 with st.spinner("Thinking..."):
                     answer = get_completion_by_messages(messages_for_llm)
                     st.write(answer)
-            st.session_state.messages.append({"role": "assistant", "content": answer})
+                    with st.expander("📄 Show sources used for this answer"):
+                        for i, (chunk_text_snippet, dist) in enumerate(retrieved):
+                            st.caption(f"**Excerpt {i+1}** — {relevance_label(dist)}")
+                            st.text(chunk_text_snippet[:400] + ("..." if len(chunk_text_snippet) > 400 else ""))
+
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": answer,
+                "sources": retrieved
+            })
+            st.rerun()
     else:
         st.info("Please upload a document to start asking questions.")
 
@@ -118,6 +173,12 @@ elif page == "About Us":
     ScholarAssist was built to help pastoral scholars quickly find answers to common
     questions about their scholarship terms and administrative procedures, without needing
     to search through the full Admin Handbook manually.
+
+    **Key features:**
+    - RAG-powered Q&A grounded in the official Admin Handbook
+    - Transparent source excerpts shown for every answer, so scholars can verify accuracy
+    - Suggested starter questions to help scholars get started quickly
+    - Feedback buttons to flag whether an answer was helpful
     """)
 
 # ---------- Methodology Page ----------
@@ -129,7 +190,8 @@ elif page == "Methodology":
     2. Each chunk is converted into a numerical embedding using OpenAI's embedding model.
     3. The embeddings are stored in a local FAISS vector index for fast similarity search.
     4. When a question is asked, it is also converted into an embedding.
-    5. FAISS retrieves the most similar chunks to the question.
+    5. FAISS retrieves the most similar chunks to the question, along with a relevance score.
     6. These chunks are passed to an LLM along with the question to generate a grounded answer.
+    7. The source excerpts and relevance labels are shown to the scholar for transparency.
     """)
     st.image("scholarassist_flowchart_v1.png", caption="RAG Process Flow for the Document Q&A feature")
