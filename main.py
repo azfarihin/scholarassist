@@ -138,7 +138,7 @@ if not st.session_state.chunks:
         add_document(full_text, "ASSP Scholar Handbook", "Handbook")
 
 # ---------- Sidebar navigation ----------
-page = st.sidebar.radio("Navigate", ["🏠 Home", "📝 Forms & Requests", "📄 My Documents", "ℹ️ About & Methodology"])
+page = st.sidebar.radio("Navigate", ["🏠 Home", "📝 Forms & Requests", "📄 My Documents", "ℹ️ About Us", "🔬 Methodology"])
 
 DOCUMENT_CATEGORIES = [
     "Medical Certificate (MC)",
@@ -557,20 +557,53 @@ elif page == "📄 My Documents":
 # =========================================================
 # ABOUT & METHODOLOGY PAGE
 # =========================================================
-elif page == "ℹ️ About & Methodology":
+elif page == "ℹ️ About Us":
     st.markdown("""
     <div style="background:#2D3142;padding:28px 28px;border-radius:16px;margin-bottom:20px;">
-        <h1 style="color:#F4F1EA !important;margin:0;font-size:2.1rem;">About & Methodology</h1>
+        <h1 style="color:#F4F1EA !important;margin:0;font-size:2.1rem;">About Us</h1>
     </div>
     """, unsafe_allow_html=True)
 
-    st.header("About Us")
+    st.header("Project Scope")
     st.write("""
     The ASSP Scholar Portal was built to bring together everything a scholar needs — from
     pre-departure preparation through to graduation — into a single place, instead of scattered
     emails, static info sites, and repeated queries to Scholar Relations Officers.
 
-    **Key features:**
+    It supports two main use cases:
+    1. **Chat with information** — scholars ask natural-language questions and receive answers
+       grounded in the Scholar Handbook and their own submitted records.
+    2. **Document & form ingestion** — scholars upload documents or submit structured requests
+       (Leave of Absence, claims, extensions), which are immediately available to the chat assistant
+       and reflected on the dashboard.
+    """)
+
+    st.header("Objectives")
+    st.write("""
+    - Let scholars self-serve accurate answers that combine scholarship policy with their own
+      personal status (e.g. remaining allowance balances), rather than manually cross-referencing
+      the handbook against their own records.
+    - Reduce repetitive manual lookups currently performed by staff, freeing time for higher-value work.
+    - Provide a single, structured channel for common administrative requests, replacing ad hoc email.
+    - Demonstrate that this pattern (policy + personal records combined in one retrieval layer)
+      generalises beyond this specific handbook to other entitlement-based schemes.
+    """)
+
+    st.header("Data Sources")
+    st.write("""
+    - **ASSP Scholar Handbook** — a sample, fictional scholarship handbook covering eligibility,
+      financial support, bond terms, leave, travel arrangements, and more (pre-loaded automatically).
+    - **Scholar-submitted documents** — files uploaded under My Documents (PDF, TXT, PNG, JPEG),
+      such as sample medical certificates, receipts, or immigration documents.
+    - **Scholar-submitted forms** — structured requests submitted under Forms & Requests (Leave of
+      Absence, Claim/Reimbursement, Course Extension), converted into text summaries automatically.
+
+    All data used in this prototype is sample or fictional. Real personal or identifying information
+    should not be uploaded.
+    """)
+
+    st.header("Key Features")
+    st.write("""
     - A dashboard homepage showing a financial snapshot, upcoming deadlines, and document status at a glance
     - A pre-loaded Scholar Handbook so scholars can start asking questions immediately, no setup required
     - Structured Forms & Requests (Leave of Absence, Claims, Course Extension) instead of email-based requests
@@ -579,26 +612,58 @@ elif page == "ℹ️ About & Methodology":
     - An announcements feed and journey stepper to keep scholars oriented at every stage
     """)
 
-    st.header("Methodology")
+# =========================================================
+# METHODOLOGY PAGE
+# =========================================================
+elif page == "🔬 Methodology":
+    st.markdown("""
+    <div style="background:#2D3142;padding:28px 28px;border-radius:16px;margin-bottom:20px;">
+        <h1 style="color:#F4F1EA !important;margin:0;font-size:2.1rem;">Methodology</h1>
+    </div>
+    """, unsafe_allow_html=True)
+
     st.write("""
     This application uses Retrieval-Augmented Generation (RAG), extended to support multiple documents
-    from multiple sources:
-    1. The Scholar Handbook is loaded automatically on first use; scholars may also add their own
-       documents under My Documents, or submit structured requests under Forms & Requests — both are
-       tagged with a category (e.g. Medical Certificate, Claim/Receipt).
-    2. Uploaded PDFs and text files are read directly; uploaded images are processed using a
-       vision-capable LLM to transcribe their content; submitted forms are converted into a structured
-       text summary automatically.
-    3. Every document is split into overlapping text chunks and converted into a numerical embedding
-       using OpenAI's embedding model.
-    4. All chunks — from the handbook, personal uploads, and submitted forms — are stored together in
-       a single local FAISS vector index, alongside metadata recording source and category.
-    5. When a scholar asks a question, personal documents are included in full (so aggregation questions
-       like "how many MC days have I used" are always answerable), while the handbook uses FAISS semantic
-       search to pull only the most relevant policy sections.
-    6. These chunks, together with their source and category, are passed to an LLM along with the question
-       to generate a grounded answer.
-    7. The source excerpts, their originating document, and relevance labels are shown to the scholar for
-       full transparency.
+    from multiple sources, across two main use cases described below.
     """)
-    st.image("scholarassist_flowchart_v1.png", caption="RAG Process Flow for the Document Q&A feature")
+
+    st.header("Use Case 1: Chat with Information")
+    st.write("""
+    1. The Scholar Handbook is loaded automatically on first use.
+    2. When a scholar asks a question, it is converted into an embedding.
+    3. Personal documents and submitted requests are included in full in the context (so aggregation
+       questions like "how much of my airfare allowance is left" are always answerable), while the
+       handbook uses FAISS semantic search to pull only the most relevant policy sections.
+    4. The retrieved content, together with source and category metadata, is passed to an LLM along
+       with the question and safety instructions to generate a grounded answer.
+    5. The answer is displayed with source excerpts, their originating document, and relevance labels,
+       for full transparency.
+    """)
+    st.image("scholarassist_flowchart_v1.png", caption="Process Flow — Use Case 1: Chat with Information")
+
+    st.header("Use Case 2: Document & Form Ingestion")
+    st.write("""
+    1. A scholar uploads a document (PDF, TXT, PNG, or JPEG) under My Documents, or submits a
+       structured form under Forms & Requests.
+    2. If an image was uploaded, a vision-capable LLM transcribes its readable text.
+    3. If a form was submitted, its fields are converted into a structured text summary automatically.
+    4. The resulting text is split into overlapping chunks and converted into embeddings using
+       OpenAI's embedding model.
+    5. The embeddings are added to the same local FAISS vector index used by the Handbook, tagged
+       with source and category, making the new content immediately available to the chat assistant.
+    6. The Home dashboard (financial snapshot, document status tracker) updates to reflect the new
+       submission.
+    """)
+    st.image("scholarassist_flowchart_v2.png", caption="Process Flow — Use Case 2: Document & Form Ingestion")
+
+    st.header("Technical Implementation Notes")
+    st.write("""
+    - **Prompt engineering:** the system prompt explicitly instructs the LLM on aggregation reasoning
+      (e.g. summing across multiple documents in a category) and on how to handle cases where no
+      relevant documents exist, rather than guessing.
+    - **Prompt injection safeguards:** the system prompt instructs the LLM to treat all document and
+      form content strictly as reference text, ignoring any instructions embedded within uploaded
+      content or user questions that attempt to override its role.
+    - **Multiple LLM tools in use:** an embedding model (semantic search), a chat completion model
+      (answer generation), and a vision-capable model (image-to-text extraction for uploaded photos).
+    """)
